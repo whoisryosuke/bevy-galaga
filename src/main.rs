@@ -29,7 +29,12 @@ struct Velocity(Vec2);
 #[derive(Component)]
 struct Collider;
 
+// Defines the amount of time that should elapse between each physics step
+// in this case, 60fps
+const TIME_STEP: f32 = 1.0 / 60.0;
+
 const PADDLE_SIZE: Vec3 = Vec3::new(120.0, 20.0, 0.0);
+const PLAYER_SPEED: f32 = 100.0;
 const BALL_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 0.0);
 const BALL_SIZE: Vec3 = Vec3::new(10.0, 10.0, 0.0);
 const BALL_SPEED: f32 = 400.0;
@@ -83,12 +88,20 @@ fn move_player(
     mut query: Query<&mut Transform, With<Player>>,
 ) {
     let mut paddle_transform = query.single_mut();
+    let mut direction = 0.0;
 
     if keyboard_input.pressed(KeyCode::Left) {
         println!("[KEYBOARD] Pressed left");
+        direction -= 1.0;
     }
 
     if keyboard_input.pressed(KeyCode::Right) {
         println!("[KEYBOARD] Pressed right");
+        direction += 1.0;
     }
+
+    // Calculate the new horizontal paddle position based on player input
+    let new_paddle_position = paddle_transform.translation.x + direction * PLAYER_SPEED * TIME_STEP;
+
+    paddle_transform.translation.x = new_paddle_position;
 }
