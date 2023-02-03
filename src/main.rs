@@ -8,7 +8,10 @@ fn main() {
             SystemSet::new()
                 // .with_system(check_for_collisions)
                 // .with_system(move_player.before(check_for_collisions))
-                .with_system(move_player),
+                .with_system(move_player)
+                .with_system(move_projectiles)
+                .with_system(destroy_projectiles)
+                .with_system(shoot_projectile),
         )
         .run();
 }
@@ -34,7 +37,8 @@ struct Collider;
 const TIME_STEP: f32 = 1.0 / 60.0;
 
 const PLAYER_SIZE: Vec3 = Vec3::new(120.0, 20.0, 0.0);
-const PLAYER_SPEED: f32 = 100.0;
+const PLAYER_SPEED: f32 = 400.0;
+const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 0.0);
 const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 0.0);
 const PROJECTILE_SIZE: Vec3 = Vec3::new(10.0, 10.0, 0.0);
 const PROJECTILE_SPEED: f32 = 400.0;
@@ -56,7 +60,7 @@ fn setup_game(
     commands.spawn((
         SpriteBundle {
             transform: Transform {
-                translation: Vec3::new(0.0, -250.0, 0.0),
+                translation: PLAYER_STARTING_POSITION,
                 scale: PLAYER_SIZE,
                 ..default()
             },
@@ -88,7 +92,7 @@ fn move_player(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&mut Transform, With<Player>>,
 ) {
-    let mut paddle_transform = query.single_mut();
+    let mut player_transform = query.single_mut();
     let mut direction = 0.0;
 
     if keyboard_input.pressed(KeyCode::Left) {
@@ -99,9 +103,55 @@ fn move_player(
         direction += 1.0;
     }
 
-    // Calculate the new horizontal paddle position based on player input
-    let new_paddle_position = paddle_transform.translation.x + direction * PLAYER_SPEED * TIME_STEP;
+    // Calculate the new horizontal player position based on player input
+    let new_player_position = player_transform.translation.x + direction * PLAYER_SPEED * TIME_STEP;
     // TODO: make sure player doesn't exceed bounds of game area
 
-    paddle_transform.translation.x = new_paddle_position;
+    player_transform.translation.x = new_player_position;
+}
+
+fn shoot_projectile(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<&Transform, With<Player>>,
+) {
+    let player_transform = query.single_mut();
+
+    if keyboard_input.pressed(KeyCode::Space) {
+        // Spawn projectile
+        commands.spawn((
+            MaterialMesh2dBundle {
+                mesh: meshes.add(shape::Circle::default().into()).into(),
+                material: materials.add(ColorMaterial::from(PROJECTILE_COLOR)),
+                transform: Transform::from_translation(player_transform.translation)
+                    .with_scale(PROJECTILE_SIZE),
+                ..default()
+            },
+            Projectile,
+            Velocity(INITIAL_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
+        ));
+    }
+}
+
+fn move_projectiles(mut query: Query<&mut Transform, With<Projectile>>) {
+    for mut collider_transform in &mut query {
+        // Calculate the new horizontal player position based on player input
+        let new_projectile_position = collider_transform.translation.y + 250.0 * TIME_STEP;
+        // TODO: make sure player doesn't exceed bounds of game area
+
+        collider_transform.translation.y = new_projectile_position;
+    }
+}
+
+fn destroy_projectiles(
+    mut commands: Commands,
+    query: Query<(Entity, &Transform), With<Projectile>>,
+) {
+    for (collider_entity, collider_transform) in &query {
+        if collider_transform.translation.y > 300.0 {
+            commands.entity(collider_entity).despawn();
+        }
+    }
 }
