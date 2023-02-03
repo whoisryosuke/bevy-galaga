@@ -4,6 +4,12 @@ fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
         .add_startup_system(setup_game)
+        .add_system_set(
+            SystemSet::new()
+                // .with_system(check_for_collisions)
+                // .with_system(move_player.before(check_for_collisions))
+                .with_system(move_player),
+        )
         .run();
 }
 
@@ -70,4 +76,19 @@ fn setup_game(
         Projectile,
         Velocity(INITIAL_BALL_DIRECTION.normalize() * BALL_SPEED),
     ));
+}
+
+fn move_player(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Transform, With<Player>>,
+) {
+    let mut paddle_transform = query.single_mut();
+
+    if keyboard_input.pressed(KeyCode::Left) {
+        println!("[KEYBOARD] Pressed left");
+    }
+
+    if keyboard_input.pressed(KeyCode::Right) {
+        println!("[KEYBOARD] Pressed right");
+    }
 }
