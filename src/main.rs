@@ -7,4 +7,7 @@ fn main() {
         .run();
 }
 
-fn setup_game(mut commands: Commands) {}
+fn setup_game(mut commands: Commands) {
+    // Camera
+    commands.spawn(Camera2dBundle::default());
+}
