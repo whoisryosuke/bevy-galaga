@@ -1,3 +1,5 @@
+![Screenshot of the Bevy Galaga game running natively on desktop. A galaga ship is seen on bottom of screen, a green bug enemy is in middle, and several projectiles fly upwards](docs/screenshot.png)
+
 # Galaga Clone in Bevy + Rust
 
 This is a experiment ([and tutorial soon](https://whoisryosuke.com/blog)) to learn how to create a Galaga clone using the Bevy game engine framework and Rust language.
