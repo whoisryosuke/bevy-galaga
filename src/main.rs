@@ -1,11 +1,13 @@
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle};
+use bevy::{prelude::*, sprite::MaterialMesh2dBundle, time::FixedTimestep};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .insert_resource(ProjectileTimer(Timer::from_seconds(0.3, TimerMode::Once)))
         .add_startup_system(setup_game)
         .add_system_set(
             SystemSet::new()
+                .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
                 // .with_system(check_for_collisions)
                 // .with_system(move_player.before(check_for_collisions))
                 .with_system(move_player)
@@ -24,6 +26,10 @@ struct Player;
 // The projectile spawned by Player firing weapon
 #[derive(Component)]
 struct Projectile;
+
+// Timer used to limit player shooting every frame per second
+#[derive(Resource)]
+struct ProjectileTimer(Timer);
 
 // The speed of an object
 #[derive(Component, Deref, DerefMut)]
@@ -114,6 +120,8 @@ fn move_player(
 }
 
 fn shoot_projectile(
+    time: Res<Time>,
+    mut projectile_timer: ResMut<ProjectileTimer>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
@@ -123,18 +131,25 @@ fn shoot_projectile(
     let player_transform = query.single_mut();
 
     if keyboard_input.pressed(KeyCode::Space) {
-        // Spawn projectile
-        commands.spawn((
-            MaterialMesh2dBundle {
-                mesh: meshes.add(shape::Circle::default().into()).into(),
-                material: materials.add(ColorMaterial::from(PROJECTILE_COLOR)),
-                transform: Transform::from_translation(player_transform.translation)
-                    .with_scale(PROJECTILE_SIZE),
-                ..default()
-            },
-            Projectile,
-            Velocity(PLAYER_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
-        ));
+        // Check if player is allowed to shoot based on internal timer
+        // We have to "tick" the timer to update it with the latest time
+        if projectile_timer.0.tick(time.delta()).finished() {
+            // Reset the timer
+            projectile_timer.0.reset();
+
+            // Spawn projectile
+            commands.spawn((
+                MaterialMesh2dBundle {
+                    mesh: meshes.add(shape::Circle::default().into()).into(),
+                    material: materials.add(ColorMaterial::from(PROJECTILE_COLOR)),
+                    transform: Transform::from_translation(player_transform.translation)
+                        .with_scale(PROJECTILE_SIZE),
+                    ..default()
+                },
+                Projectile,
+                Velocity(PLAYER_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
+            ));
+        }
     }
 }
 
