@@ -99,11 +99,14 @@ fn setup_game(
 
     // Spawn enemies
     commands.spawn((
-        MaterialMesh2dBundle {
-            mesh: meshes.add(shape::Circle::default().into()).into(),
-            material: materials.add(ColorMaterial::from(PROJECTILE_COLOR)),
+        SpriteBundle {
+            texture: asset_server.load("sprites/enemy_green_bug.png"),
             transform: Transform::from_translation(PROJECTILE_STARTING_POSITION)
-                .with_scale(PROJECTILE_SIZE * Vec3::new(2.0, 2.0, 2.0)),
+                .with_scale(PLAYER_SIZE),
+            sprite: Sprite {
+                // color: PLAYER_COLOR,
+                ..default()
+            },
             ..default()
         },
         Enemy,
@@ -141,6 +144,7 @@ fn shoot_projectile(
     mut materials: ResMut<Assets<ColorMaterial>>,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&Transform, With<Player>>,
+    asset_server: Res<AssetServer>,
 ) {
     let player_transform = query.single_mut();
 
@@ -153,11 +157,14 @@ fn shoot_projectile(
 
             // Spawn projectile
             commands.spawn((
-                MaterialMesh2dBundle {
-                    mesh: meshes.add(shape::Circle::default().into()).into(),
-                    material: materials.add(ColorMaterial::from(PROJECTILE_COLOR)),
+                SpriteBundle {
+                    texture: asset_server.load("sprites/player_projectile.png"),
                     transform: Transform::from_translation(player_transform.translation)
-                        .with_scale(PROJECTILE_SIZE),
+                        .with_scale(PLAYER_SIZE),
+                    sprite: Sprite {
+                        // color: PLAYER_COLOR,
+                        ..default()
+                    },
                     ..default()
                 },
                 Projectile,
