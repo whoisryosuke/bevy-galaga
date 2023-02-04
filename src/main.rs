@@ -1,19 +1,27 @@
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle, time::FixedTimestep};
+use std::time::Duration;
+
+use bevy::{
+    prelude::*,
+    sprite::{collide_aabb::collide, MaterialMesh2dBundle},
+    time::FixedTimestep,
+};
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
-        .insert_resource(ProjectileTimer(Timer::from_seconds(0.3, TimerMode::Once)))
+        .insert_resource(ProjectileTimer(Timer::from_seconds(
+            PROJECTILE_TIME_LIMIT,
+            TimerMode::Once,
+        )))
         .add_startup_system(setup_game)
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
-                // .with_system(check_for_collisions)
-                // .with_system(move_player.before(check_for_collisions))
-                .with_system(move_player)
-                .with_system(move_projectiles)
-                .with_system(destroy_projectiles)
-                .with_system(shoot_projectile),
+                .with_system(check_for_collisions)
+                .with_system(move_player.before(check_for_collisions))
+                .with_system(move_projectiles.before(check_for_collisions))
+                .with_system(destroy_projectiles.before(check_for_collisions))
+                .with_system(shoot_projectile.before(check_for_collisions)),
         )
         .add_system(bevy::window::close_on_esc)
         .run();
@@ -22,6 +30,10 @@ fn main() {
 // The Player object
 #[derive(Component)]
 struct Player;
+
+// The Enemy object
+#[derive(Component)]
+struct Enemy;
 
 // The projectile spawned by Player firing weapon
 #[derive(Component)]
@@ -43,6 +55,7 @@ struct Collider;
 // in this case, 60fps
 const TIME_STEP: f32 = 1.0 / 60.0;
 const SCREEN_EDGE_VERTICAL: f32 = 350.0;
+const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 
 const PLAYER_SIZE: Vec3 = Vec3::new(120.0, 20.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
@@ -83,17 +96,17 @@ fn setup_game(
         Collider,
     ));
 
-    // Ball
+    // Spawn enemies
     commands.spawn((
         MaterialMesh2dBundle {
             mesh: meshes.add(shape::Circle::default().into()).into(),
             material: materials.add(ColorMaterial::from(PROJECTILE_COLOR)),
             transform: Transform::from_translation(PROJECTILE_STARTING_POSITION)
-                .with_scale(PROJECTILE_SIZE),
+                .with_scale(PROJECTILE_SIZE * Vec3::new(2.0, 2.0, 2.0)),
             ..default()
         },
-        Projectile,
-        Velocity(ENEMY_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
+        Enemy,
+        Collider,
     ));
 }
 
@@ -173,6 +186,39 @@ fn destroy_projectiles(
             || collider_transform.translation.y < -SCREEN_EDGE_VERTICAL
         {
             commands.entity(collider_entity).despawn();
+        }
+    }
+}
+
+fn check_for_collisions(
+    mut commands: Commands,
+    projectiles_query: Query<(Entity, &Transform), With<Projectile>>,
+    collider_query: Query<(Entity, &Transform, Option<&Enemy>), With<Collider>>,
+) {
+    // Loop through all the projectiles on screen
+    for (projectile_entity, projectile_transform) in &projectiles_query {
+        // Loop through all collidable elements on the screen
+        // TODO: Figure out how to flatten this - 2 for loops no bueno
+        for (collider_entity, collider_transform, enemy_check) in &collider_query {
+            let collision = collide(
+                projectile_transform.translation,
+                projectile_transform.scale.truncate(),
+                collider_transform.translation,
+                collider_transform.scale.truncate(),
+            );
+
+            if let Some(collision) = collision {
+                // If it's an enemy, destroy!
+                if enemy_check.is_some() {
+                    println!("Collided!");
+
+                    // Enemy is destroyed
+                    commands.entity(collider_entity).despawn();
+
+                    // Projectile disappears too? Prevents "cutting through" a line of enemies all at once
+                    commands.entity(projectile_entity).despawn();
+                }
+            }
         }
     }
 }
