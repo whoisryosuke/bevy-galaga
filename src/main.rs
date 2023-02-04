@@ -13,6 +13,7 @@ fn main() {
                 .with_system(destroy_projectiles)
                 .with_system(shoot_projectile),
         )
+        .add_system(bevy::window::close_on_esc)
         .run();
 }
 
