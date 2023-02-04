@@ -57,7 +57,7 @@ const TIME_STEP: f32 = 1.0 / 60.0;
 const SCREEN_EDGE_VERTICAL: f32 = 350.0;
 const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 
-const PLAYER_SIZE: Vec3 = Vec3::new(120.0, 20.0, 0.0);
+const PLAYER_SIZE: Vec3 = Vec3::new(2.0, 2.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
 const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 0.0);
 const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 0.0);
@@ -81,13 +81,14 @@ fn setup_game(
     // Spawn Player in initial position
     commands.spawn((
         SpriteBundle {
+            texture: asset_server.load("sprites/player_default.png"),
             transform: Transform {
                 translation: PLAYER_STARTING_POSITION,
                 scale: PLAYER_SIZE,
                 ..default()
             },
             sprite: Sprite {
-                color: PLAYER_COLOR,
+                // color: PLAYER_COLOR,
                 ..default()
             },
             ..default()
