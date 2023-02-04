@@ -35,6 +35,7 @@ struct Collider;
 // Defines the amount of time that should elapse between each physics step
 // in this case, 60fps
 const TIME_STEP: f32 = 1.0 / 60.0;
+const SCREEN_EDGE_VERTICAL: f32 = 350.0;
 
 const PLAYER_SIZE: Vec3 = Vec3::new(120.0, 20.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
@@ -42,7 +43,8 @@ const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 0.0);
 const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 0.0);
 const PROJECTILE_SIZE: Vec3 = Vec3::new(10.0, 10.0, 0.0);
 const PROJECTILE_SPEED: f32 = 400.0;
-const INITIAL_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
+const ENEMY_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
+const PLAYER_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, 0.5);
 
 const PLAYER_COLOR: Color = Color::rgb(0.3, 0.3, 0.7);
 const PROJECTILE_COLOR: Color = Color::rgb(0.7, 0.87, 0.7);
@@ -84,7 +86,7 @@ fn setup_game(
             ..default()
         },
         Projectile,
-        Velocity(INITIAL_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
+        Velocity(ENEMY_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
     ));
 }
 
@@ -130,15 +132,15 @@ fn shoot_projectile(
                 ..default()
             },
             Projectile,
-            Velocity(INITIAL_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
+            Velocity(PLAYER_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
         ));
     }
 }
 
-fn move_projectiles(mut query: Query<&mut Transform, With<Projectile>>) {
-    for mut collider_transform in &mut query {
+fn move_projectiles(mut query: Query<(&mut Transform, &Velocity), With<Projectile>>) {
+    for (mut collider_transform, velocity) in &mut query {
         // Calculate the new horizontal player position based on player input
-        let new_projectile_position = collider_transform.translation.y + 250.0 * TIME_STEP;
+        let new_projectile_position = collider_transform.translation.y + velocity.y * TIME_STEP;
         // TODO: make sure player doesn't exceed bounds of game area
 
         collider_transform.translation.y = new_projectile_position;
@@ -150,7 +152,10 @@ fn destroy_projectiles(
     query: Query<(Entity, &Transform), With<Projectile>>,
 ) {
     for (collider_entity, collider_transform) in &query {
-        if collider_transform.translation.y > 300.0 {
+        // Check if projectile has passed top or bottom of screen
+        if collider_transform.translation.y > SCREEN_EDGE_VERTICAL
+            || collider_transform.translation.y < -SCREEN_EDGE_VERTICAL
+        {
             commands.entity(collider_entity).despawn();
         }
     }
