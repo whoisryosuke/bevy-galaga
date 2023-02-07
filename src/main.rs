@@ -65,14 +65,11 @@ const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 const PLAYER_SIZE: Vec3 = Vec3::new(15.0, 16.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
 const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 1.0);
-const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 1.0);
-const PROJECTILE_SIZE: Vec3 = Vec3::new(10.0, 10.0, 0.0);
+const ENEMY_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 1.0);
+const PROJECTILE_SIZE: Vec3 = Vec3::splat(3.0);
 const PROJECTILE_SPEED: f32 = 400.0;
 const ENEMY_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 const PLAYER_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, 0.5);
-
-const PLAYER_COLOR: Color = Color::rgb(0.3, 0.3, 0.7);
-const PROJECTILE_COLOR: Color = Color::rgb(0.7, 0.87, 0.7);
 
 fn setup_game(
     mut commands: Commands,
@@ -128,7 +125,7 @@ fn setup_game(
             // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
             mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
             transform: Transform {
-                translation: PROJECTILE_STARTING_POSITION,
+                translation: ENEMY_STARTING_POSITION,
                 scale: PLAYER_SIZE,
                 ..default()
             },
@@ -211,7 +208,7 @@ fn shoot_projectile(
                     mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
                     transform: Transform {
                         translation: player_transform.translation,
-                        scale: Vec3::splat(3.0),
+                        scale: PROJECTILE_SIZE,
                         ..default()
                     },
                     material: materials.add(CustomMaterial {
