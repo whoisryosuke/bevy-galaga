@@ -62,7 +62,7 @@ const TIME_STEP: f32 = 1.0 / 60.0;
 const SCREEN_EDGE_VERTICAL: f32 = 350.0;
 const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 
-const PLAYER_SIZE: Vec3 = Vec3::new(2.0, 2.0, 0.0);
+const PLAYER_SIZE: Vec3 = Vec3::new(15.0, 16.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
 const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 0.0);
 const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 0.0);
@@ -96,23 +96,26 @@ fn setup_game(
         material: materials.add(CustomMaterial {
             color: Color::BLUE,
             color_texture: Some(asset_server.load("textures/space/space.png")),
+            tile: 1.0,
         }),
         ..default()
     });
 
     // Spawn Player in initial position
     commands.spawn((
-        SpriteBundle {
-            texture: asset_server.load("sprites/player_default.png"),
+        MaterialMesh2dBundle {
+            // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
+            mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
             transform: Transform {
                 translation: PLAYER_STARTING_POSITION,
                 scale: PLAYER_SIZE,
                 ..default()
             },
-            sprite: Sprite {
-                // color: PLAYER_COLOR,
-                ..default()
-            },
+            material: materials.add(CustomMaterial {
+                color: Color::BLUE,
+                color_texture: Some(asset_server.load("sprites/player_default.png")),
+                tile: 0.0,
+            }),
             ..default()
         },
         Player,
@@ -121,14 +124,19 @@ fn setup_game(
 
     // Spawn enemies
     commands.spawn((
-        SpriteBundle {
-            texture: asset_server.load("sprites/enemy_green_bug.png"),
-            transform: Transform::from_translation(PROJECTILE_STARTING_POSITION)
-                .with_scale(PLAYER_SIZE),
-            sprite: Sprite {
-                // color: PLAYER_COLOR,
+        MaterialMesh2dBundle {
+            // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
+            mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
+            transform: Transform {
+                translation: PROJECTILE_STARTING_POSITION,
+                scale: PLAYER_SIZE,
                 ..default()
             },
+            material: materials.add(CustomMaterial {
+                color: Color::BLUE,
+                color_texture: Some(asset_server.load("sprites/enemy_green_bug.png")),
+                tile: 0.0,
+            }),
             ..default()
         },
         Enemy,
@@ -148,6 +156,8 @@ impl Material2d for CustomMaterial {
 pub struct CustomMaterial {
     #[uniform(0)]
     color: Color,
+    #[uniform(0)]
+    tile: f32,
     #[texture(1)]
     #[sampler(2)]
     color_texture: Option<Handle<Image>>,
@@ -180,7 +190,7 @@ fn shoot_projectile(
     mut projectile_timer: ResMut<ProjectileTimer>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&Transform, With<Player>>,
     asset_server: Res<AssetServer>,
@@ -196,14 +206,19 @@ fn shoot_projectile(
 
             // Spawn projectile
             commands.spawn((
-                SpriteBundle {
-                    texture: asset_server.load("sprites/player_projectile.png"),
-                    transform: Transform::from_translation(player_transform.translation)
-                        .with_scale(PLAYER_SIZE),
-                    sprite: Sprite {
-                        // color: PLAYER_COLOR,
+                MaterialMesh2dBundle {
+                    // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
+                    mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
+                    transform: Transform {
+                        translation: player_transform.translation,
+                        scale: Vec3::splat(3.0),
                         ..default()
                     },
+                    material: materials.add(CustomMaterial {
+                        color: Color::BLUE,
+                        color_texture: Some(asset_server.load("sprites/player_projectile.png")),
+                        tile: 0.0,
+                    }),
                     ..default()
                 },
                 Projectile,
