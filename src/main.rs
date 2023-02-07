@@ -19,6 +19,7 @@ fn main() {
             TimerMode::Once,
         )))
         .add_startup_system(setup_game)
+        .add_system(update_material_time)
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
@@ -94,6 +95,7 @@ fn setup_game(
             color: Color::BLUE,
             color_texture: Some(asset_server.load("textures/space/space.png")),
             tile: 1.0,
+            time: 0.0,
         }),
         ..default()
     });
@@ -112,6 +114,7 @@ fn setup_game(
                 color: Color::BLUE,
                 color_texture: Some(asset_server.load("sprites/player_default.png")),
                 tile: 0.0,
+                time: 0.0,
             }),
             ..default()
         },
@@ -133,6 +136,7 @@ fn setup_game(
                 color: Color::BLUE,
                 color_texture: Some(asset_server.load("sprites/enemy_green_bug.png")),
                 tile: 0.0,
+                time: 0.0,
             }),
             ..default()
         },
@@ -153,8 +157,11 @@ impl Material2d for CustomMaterial {
 pub struct CustomMaterial {
     #[uniform(0)]
     color: Color,
+    // Should we tile this material? 1 = true
     #[uniform(0)]
     tile: f32,
+    #[uniform(0)]
+    time: f32,
     #[texture(1)]
     #[sampler(2)]
     color_texture: Option<Handle<Image>>,
@@ -215,6 +222,7 @@ fn shoot_projectile(
                         color: Color::BLUE,
                         color_texture: Some(asset_server.load("sprites/player_projectile.png")),
                         tile: 0.0,
+                        time: 0.0,
                     }),
                     ..default()
                 },
@@ -280,4 +288,10 @@ fn check_for_collisions(
             }
         }
     }
+}
+
+fn update_material_time(time: Res<Time>, mut materials: ResMut<Assets<CustomMaterial>>) {
+    materials.iter_mut().for_each(|material| {
+        material.1.time = time.elapsed_seconds();
+    });
 }
