@@ -64,8 +64,8 @@ const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 
 const PLAYER_SIZE: Vec3 = Vec3::new(15.0, 16.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
-const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 0.0);
-const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 0.0);
+const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 1.0);
+const PROJECTILE_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 1.0);
 const PROJECTILE_SIZE: Vec3 = Vec3::new(10.0, 10.0, 0.0);
 const PROJECTILE_SPEED: f32 = 400.0;
 const ENEMY_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
