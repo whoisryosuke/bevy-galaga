@@ -87,7 +87,7 @@ fn setup_game(
     commands.spawn(MaterialMesh2dBundle {
         // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
         mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
-        transform: Transform::default().with_scale(Vec3::splat(128.)),
+        transform: Transform::default().with_scale(Vec3::splat(SCREEN_EDGE_VERTICAL * 2.0)),
         // material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
         material: materials.add(CustomMaterial {
             color: Color::BLUE,

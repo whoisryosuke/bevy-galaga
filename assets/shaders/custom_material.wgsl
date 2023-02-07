@@ -13,5 +13,5 @@ var base_color_sampler: sampler;
 fn fragment(
     #import bevy_pbr::mesh_vertex_output
 ) -> @location(0) vec4<f32> {
-    return material.color * textureSample(base_color_texture, base_color_sampler, uv);
+    return textureSample(base_color_texture, base_color_sampler, fract(uv * 10.0));
 }
