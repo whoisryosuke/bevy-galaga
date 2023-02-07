@@ -2,13 +2,18 @@ use std::time::Duration;
 
 use bevy::{
     prelude::*,
-    sprite::{collide_aabb::collide, MaterialMesh2dBundle},
+    reflect::TypeUuid,
+    render::render_resource::{AsBindGroup, ShaderRef},
+    sprite::{
+        collide_aabb::collide, Material2d, Material2dPlugin, MaterialMesh2dBundle, Mesh2dHandle,
+    },
     time::FixedTimestep,
 };
 
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins)
+        .add_plugin(Material2dPlugin::<CustomMaterial>::default())
         .insert_resource(ProjectileTimer(Timer::from_seconds(
             PROJECTILE_TIME_LIMIT,
             TimerMode::Once,
@@ -72,11 +77,24 @@ const PROJECTILE_COLOR: Color = Color::rgb(0.7, 0.87, 0.7);
 fn setup_game(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
     asset_server: Res<AssetServer>,
 ) {
     // Camera
     commands.spawn(Camera2dBundle::default());
+
+    // Background
+    commands.spawn(MaterialMesh2dBundle {
+        // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
+        mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
+        transform: Transform::default().with_scale(Vec3::splat(128.)),
+        // material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
+        material: materials.add(CustomMaterial {
+            color: Color::BLUE,
+            color_texture: Some(asset_server.load("sprites/player_default.png")),
+        }),
+        ..default()
+    });
 
     // Spawn Player in initial position
     commands.spawn((
@@ -112,6 +130,23 @@ fn setup_game(
         Enemy,
         Collider,
     ));
+}
+
+impl Material2d for CustomMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/custom_material.wgsl".into()
+    }
+}
+
+// Background shader material
+#[derive(AsBindGroup, TypeUuid, Debug, Clone)]
+#[uuid = "f690fdae-d598-45ab-8225-97e2a3f056e0"]
+pub struct CustomMaterial {
+    #[uniform(0)]
+    color: Color,
+    #[texture(1)]
+    #[sampler(2)]
+    color_texture: Option<Handle<Image>>,
 }
 
 fn move_player(
