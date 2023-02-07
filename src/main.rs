@@ -87,11 +87,15 @@ fn setup_game(
     commands.spawn(MaterialMesh2dBundle {
         // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
         mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
-        transform: Transform::default().with_scale(Vec3::splat(SCREEN_EDGE_VERTICAL * 2.0)),
+        transform: Transform::default().with_scale(Vec3::new(
+            1300.0,
+            SCREEN_EDGE_VERTICAL * 2.0,
+            0.0,
+        )),
         // material: materials.add(ColorMaterial::from(Color::TURQUOISE)),
         material: materials.add(CustomMaterial {
             color: Color::BLUE,
-            color_texture: Some(asset_server.load("sprites/player_default.png")),
+            color_texture: Some(asset_server.load("textures/space/space.png")),
         }),
         ..default()
     });
