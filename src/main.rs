@@ -538,7 +538,7 @@ fn display_start_screen(
     mut commands: Commands,
     game_fonts: Res<GameFonts>,
     game_state: Res<GameState>,
-    mut query: Query<Entity, With<PressStartText>>,
+    query: Query<Entity, With<PressStartText>>,
 ) {
     let mut start_screen_exists = false;
     for text_obj in &query {
