@@ -20,6 +20,7 @@ fn main() {
         )))
         .add_startup_system(setup_game)
         .add_system(update_material_time)
+        .insert_resource(PlayerScore { score: 0 })
         .add_event::<EnemyDeathEvent>()
         .add_event::<ProjectileEvent>()
         .add_system_set(
@@ -30,6 +31,7 @@ fn main() {
                 .with_system(move_projectiles.before(check_for_collisions))
                 .with_system(destroy_projectiles.before(check_for_collisions))
                 .with_system(play_projectile_sound.before(check_for_collisions))
+                .with_system(update_player_score.before(play_projectile_sound))
                 .with_system(play_enemy_death_sound.before(check_for_collisions))
                 .with_system(shoot_projectile.before(check_for_collisions)),
         )
@@ -76,9 +78,25 @@ struct EnemyDeathSound(Handle<AudioSource>);
 #[derive(Resource)]
 struct ProjectileSound(Handle<AudioSource>);
 
+// Resources
+// The players current score
+#[derive(Resource)]
+struct PlayerScore {
+    score: usize,
+}
+
+// UI
+// The player's score (should be alongside a TextBundle)
+#[derive(Component)]
+struct PlayerScoreText;
+
+#[derive(Component)]
+struct HighScoreText;
+
 // Defines the amount of time that should elapse between each physics step
 // in this case, 60fps
 const TIME_STEP: f32 = 1.0 / 60.0;
+const SCREEN_WIDTH_DEFAULT: f32 = 1300.0;
 const SCREEN_EDGE_VERTICAL: f32 = 350.0;
 const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 
@@ -90,6 +108,13 @@ const PROJECTILE_SIZE: Vec3 = Vec3::splat(3.0);
 const PROJECTILE_SPEED: f32 = 400.0;
 const ENEMY_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 const PLAYER_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, 0.5);
+
+// UI
+const UI_FONT_MEDIUM: f32 = 32.0;
+const UI_COLOR_RED: Color = Color::rgb(0.8, 0.0, 0.0);
+const UI_COLOR_WHITE: Color = Color::rgb(0.95, 0.95, 0.95);
+const UI_PADDING_CENTER_TOP: Val = Val::Px(16.0);
+const UI_PADDING_CENTER_LEFT: Val = Val::Px(SCREEN_WIDTH_DEFAULT / 2.0);
 
 fn setup_game(
     mut commands: Commands,
@@ -111,7 +136,7 @@ fn setup_game(
         // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
         mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
         transform: Transform::default().with_scale(Vec3::new(
-            1300.0,
+            SCREEN_WIDTH_DEFAULT,
             SCREEN_EDGE_VERTICAL * 2.0,
             0.0,
         )),
@@ -124,6 +149,79 @@ fn setup_game(
         }),
         ..default()
     });
+
+    // UI Elements
+    // High Score
+    commands.spawn((
+        TextBundle::from_sections([
+            TextSection::new(
+                "High Score\n",
+                TextStyle {
+                    font: asset_server.load("fonts/VT323-Regular.ttf"),
+                    font_size: UI_FONT_MEDIUM,
+                    color: UI_COLOR_RED,
+                },
+            ),
+            TextSection::new(
+                "20000",
+                TextStyle {
+                    font: asset_server.load("fonts/VT323-Regular.ttf"),
+                    font_size: UI_FONT_MEDIUM,
+                    color: UI_COLOR_WHITE,
+                },
+            ),
+        ])
+        .with_text_alignment(TextAlignment::TOP_CENTER)
+        .with_style(Style {
+            // flex_direction: FlexDirection::Row,
+            // align_content: AlignContent::Center,
+            // align_items: AlignItems::Center,
+            // align_self: AlignSelf::Center,
+            position_type: PositionType::Absolute,
+            flex_wrap: FlexWrap::Wrap,
+            // size: Size {
+            //     width: Val::Px(SCREEN_WIDTH_DEFAULT),
+            //     height: Val::Px(200.0),
+            // },
+            position: UiRect {
+                top: UI_PADDING_CENTER_TOP,
+                left: UI_PADDING_CENTER_LEFT,
+                // top: Val::Px(0.0),
+                // left: Val::Px(0.0),
+                ..default()
+            },
+            ..default()
+        }),
+        HighScoreText,
+    ));
+    // Player Score
+    commands.spawn((
+        TextBundle::from_sections([
+            TextSection::new(
+                "1up\n",
+                TextStyle {
+                    font: asset_server.load("fonts/VT323-Regular.ttf"),
+                    font_size: UI_FONT_MEDIUM,
+                    color: UI_COLOR_RED,
+                },
+            ),
+            TextSection::from_style(TextStyle {
+                font: asset_server.load("fonts/VT323-Regular.ttf"),
+                font_size: UI_FONT_MEDIUM,
+                color: UI_COLOR_WHITE,
+            }),
+        ])
+        .with_style(Style {
+            position_type: PositionType::Absolute,
+            position: UiRect {
+                top: UI_PADDING_CENTER_TOP,
+                left: UI_PADDING_CENTER_TOP,
+                ..default()
+            },
+            ..default()
+        }),
+        PlayerScoreText,
+    ));
 
     // Spawn Player in initial position
     commands.spawn((
@@ -355,4 +453,20 @@ fn update_material_time(time: Res<Time>, mut materials: ResMut<Assets<CustomMate
     materials.iter_mut().for_each(|material| {
         material.1.time = time.elapsed_seconds();
     });
+}
+
+fn update_player_score(
+    mut player_score: ResMut<PlayerScore>,
+    enemy_death_events: EventReader<EnemyDeathEvent>,
+    mut query: Query<&mut Text, With<PlayerScoreText>>,
+) {
+    // Check for events
+    if !enemy_death_events.is_empty() {
+        println!("[UI] Updating player score");
+
+        player_score.score += 10;
+        for mut text in &mut query {
+            text.sections[1].value = player_score.score.to_string();
+        }
+    }
 }
