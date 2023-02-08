@@ -20,6 +20,8 @@ fn main() {
         )))
         .add_startup_system(setup_game)
         .add_system(update_material_time)
+        .add_event::<EnemyDeathEvent>()
+        .add_event::<ProjectileEvent>()
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
@@ -27,6 +29,8 @@ fn main() {
                 .with_system(move_player.before(check_for_collisions))
                 .with_system(move_projectiles.before(check_for_collisions))
                 .with_system(destroy_projectiles.before(check_for_collisions))
+                .with_system(play_projectile_sound.before(check_for_collisions))
+                .with_system(play_enemy_death_sound.before(check_for_collisions))
                 .with_system(shoot_projectile.before(check_for_collisions)),
         )
         .add_system(bevy::window::close_on_esc)
@@ -57,6 +61,21 @@ struct Velocity(Vec2);
 #[derive(Component)]
 struct Collider;
 
+// Events
+// Enemy Death
+#[derive(Default)]
+struct EnemyDeathEvent;
+
+// Projectile has been fired
+#[derive(Default)]
+struct ProjectileEvent;
+
+// Sounds
+#[derive(Resource)]
+struct EnemyDeathSound(Handle<AudioSource>);
+#[derive(Resource)]
+struct ProjectileSound(Handle<AudioSource>);
+
 // Defines the amount of time that should elapse between each physics step
 // in this case, 60fps
 const TIME_STEP: f32 = 1.0 / 60.0;
@@ -80,6 +99,12 @@ fn setup_game(
 ) {
     // Camera
     commands.spawn(Camera2dBundle::default());
+
+    // Load sound effects
+    let enemy_death_sound = asset_server.load("sounds/enemy-death.mp3");
+    commands.insert_resource(EnemyDeathSound(enemy_death_sound));
+    let projectile_sound = asset_server.load("sounds/projectile.mp3");
+    commands.insert_resource(ProjectileSound(projectile_sound));
 
     // Background
     commands.spawn(MaterialMesh2dBundle {
@@ -198,6 +223,7 @@ fn shoot_projectile(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&Transform, With<Player>>,
     asset_server: Res<AssetServer>,
+    mut projectile_events: EventWriter<ProjectileEvent>,
 ) {
     let player_transform = query.single_mut();
 
@@ -207,6 +233,9 @@ fn shoot_projectile(
         if projectile_timer.0.tick(time.delta()).finished() {
             // Reset the timer
             projectile_timer.0.reset();
+
+            // Fire off a ProjectileEvent to notify other systems
+            projectile_events.send_default();
 
             // Spawn projectile
             commands.spawn((
@@ -261,6 +290,7 @@ fn check_for_collisions(
     mut commands: Commands,
     projectiles_query: Query<(Entity, &Transform), With<Projectile>>,
     collider_query: Query<(Entity, &Transform, Option<&Enemy>), With<Collider>>,
+    mut death_events: EventWriter<EnemyDeathEvent>,
 ) {
     // Loop through all the projectiles on screen
     for (projectile_entity, projectile_transform) in &projectiles_query {
@@ -278,6 +308,8 @@ fn check_for_collisions(
                 // If it's an enemy, destroy!
                 if enemy_check.is_some() {
                     println!("Collided!");
+                    // Fire off a EnemyDeathEvent to notify other systems
+                    death_events.send_default();
 
                     // Enemy is destroyed
                     commands.entity(collider_entity).despawn();
@@ -287,6 +319,35 @@ fn check_for_collisions(
                 }
             }
         }
+    }
+}
+
+fn play_enemy_death_sound(
+    death_events: EventReader<EnemyDeathEvent>,
+    audio: Res<Audio>,
+    sound: Res<EnemyDeathSound>,
+) {
+    // Check for events
+    if !death_events.is_empty() {
+        // Clear all events this frame
+        death_events.clear();
+
+        audio.play(sound.0.clone());
+    }
+}
+
+fn play_projectile_sound(
+    projectile_events: EventReader<ProjectileEvent>,
+    audio: Res<Audio>,
+    sound: Res<ProjectileSound>,
+) {
+    // Check for events
+    if !projectile_events.is_empty() {
+        // Clear all events this frame
+        projectile_events.clear();
+        println!("[AUDIO] Playing projectile sound!");
+
+        audio.play(sound.0.clone());
     }
 }
 
