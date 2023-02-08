@@ -31,7 +31,7 @@ fn main() {
                 .with_system(move_projectiles.before(check_for_collisions))
                 .with_system(destroy_projectiles.before(check_for_collisions))
                 .with_system(play_projectile_sound.before(check_for_collisions))
-                .with_system(update_player_score.before(play_projectile_sound))
+                .with_system(update_player_score.before(play_enemy_death_sound))
                 .with_system(play_enemy_death_sound.before(check_for_collisions))
                 .with_system(shoot_projectile.before(check_for_collisions)),
         )
