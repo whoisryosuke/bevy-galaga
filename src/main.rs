@@ -21,6 +21,11 @@ fn main() {
         .add_startup_system(setup_game)
         .add_system(update_material_time)
         .insert_resource(PlayerScore { score: 0 })
+        .insert_resource(GameState {
+            started: false,
+            paused: false,
+            level: 1,
+        })
         .add_event::<EnemyDeathEvent>()
         .add_event::<ProjectileEvent>()
         .add_system_set(
@@ -35,6 +40,9 @@ fn main() {
                 .with_system(play_enemy_death_sound.before(check_for_collisions))
                 .with_system(shoot_projectile.before(check_for_collisions)),
         )
+        .add_system(start_game)
+        .add_system(pause_game)
+        .add_system(display_start_screen)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
@@ -84,6 +92,21 @@ struct ProjectileSound(Handle<AudioSource>);
 struct PlayerScore {
     score: usize,
 }
+// The players current score
+#[derive(Resource)]
+struct GameState {
+    // Has game started? (aka user presses "start")
+    started: bool,
+    // Is game paused? Only relevant is game is started
+    paused: bool,
+    // The level number (1-99+)
+    level: usize,
+}
+
+#[derive(Resource)]
+struct GameFonts {
+    body: Handle<Font>,
+}
 
 // UI
 // The player's score (should be alongside a TextBundle)
@@ -92,6 +115,9 @@ struct PlayerScoreText;
 
 #[derive(Component)]
 struct HighScoreText;
+
+#[derive(Component)]
+struct PressStartText;
 
 // Defines the amount of time that should elapse between each physics step
 // in this case, 60fps
@@ -114,7 +140,10 @@ const UI_FONT_MEDIUM: f32 = 32.0;
 const UI_COLOR_RED: Color = Color::rgb(0.8, 0.0, 0.0);
 const UI_COLOR_WHITE: Color = Color::rgb(0.95, 0.95, 0.95);
 const UI_PADDING_CENTER_TOP: Val = Val::Px(16.0);
-const UI_PADDING_CENTER_LEFT: Val = Val::Px(SCREEN_WIDTH_DEFAULT / 2.0);
+// We take the screen width and halve it to find center - then subtract a little more to accomodate for text size
+// Ideally we should make the flex 100% width and let it center using align properties, but I couldn't get that working 🤷‍♂️
+const UI_PADDING_CENTER_LEFT: Val = Val::Px(SCREEN_WIDTH_DEFAULT / 2.0 - 30.0);
+const UI_START_PADDING_LEFT: Val = Val::Px(SCREEN_WIDTH_DEFAULT / 2.0 - SCREEN_WIDTH_DEFAULT / 8.0);
 
 fn setup_game(
     mut commands: Commands,
@@ -150,6 +179,11 @@ fn setup_game(
         ..default()
     });
 
+    // Add fonts to system
+    let game_fonts = GameFonts {
+        body: asset_server.load("fonts/VT323-Regular.ttf"),
+    };
+
     // UI Elements
     // High Score
     commands.spawn((
@@ -157,7 +191,7 @@ fn setup_game(
             TextSection::new(
                 "High Score\n",
                 TextStyle {
-                    font: asset_server.load("fonts/VT323-Regular.ttf"),
+                    font: game_fonts.body.clone(),
                     font_size: UI_FONT_MEDIUM,
                     color: UI_COLOR_RED,
                 },
@@ -165,7 +199,7 @@ fn setup_game(
             TextSection::new(
                 "20000",
                 TextStyle {
-                    font: asset_server.load("fonts/VT323-Regular.ttf"),
+                    font: game_fonts.body.clone(),
                     font_size: UI_FONT_MEDIUM,
                     color: UI_COLOR_WHITE,
                 },
@@ -222,6 +256,9 @@ fn setup_game(
         }),
         PlayerScoreText,
     ));
+
+    // Now we can insert fonts as a resource after the UI has used it
+    commands.insert_resource(game_fonts);
 
     // Spawn Player in initial position
     commands.spawn((
@@ -474,6 +511,73 @@ fn update_player_score(
 
         for mut text in &mut query {
             text.sections[1].value = player_score.score.to_string();
+        }
+    }
+}
+
+fn start_game(mut game_state: ResMut<GameState>, keyboard_input: Res<Input<KeyCode>>) {
+    // If game hasn't started, detect space/return key to start game
+    if !game_state.started {
+        if keyboard_input.pressed(KeyCode::Space) | keyboard_input.pressed(KeyCode::Return) {
+            println!("[INPUT] Game Started");
+            game_state.started = true;
+        }
+    }
+}
+
+fn pause_game(mut game_state: ResMut<GameState>, keyboard_input: Res<Input<KeyCode>>) {
+    // If game has started, check for P key to pause game
+    if game_state.started {
+        if keyboard_input.pressed(KeyCode::P) {
+            game_state.paused = !game_state.paused;
+        }
+    }
+}
+
+fn display_start_screen(
+    mut commands: Commands,
+    game_fonts: Res<GameFonts>,
+    game_state: Res<GameState>,
+    mut query: Query<Entity, With<PressStartText>>,
+) {
+    let mut start_screen_exists = false;
+    for text_obj in &query {
+        // commands.entity(text_obj).id()
+        start_screen_exists = true;
+        break;
+    }
+
+    // Game hasn't started and we haven't spawned UI yet
+    if !game_state.started && !start_screen_exists {
+        // Display UI for Start Screen
+        commands.spawn((
+            TextBundle::from_sections([TextSection::new(
+                "Press Spacebar/Return to Start \n",
+                TextStyle {
+                    font: game_fonts.body.clone(),
+                    font_size: UI_FONT_MEDIUM,
+                    color: UI_COLOR_RED,
+                },
+            )])
+            .with_text_alignment(TextAlignment::TOP_CENTER)
+            .with_style(Style {
+                position_type: PositionType::Absolute,
+                position: UiRect {
+                    top: Val::Px(SCREEN_EDGE_VERTICAL),
+                    left: UI_START_PADDING_LEFT,
+                    // left: Val::Px(0.0),
+                    ..default()
+                },
+                ..default()
+            }),
+            PressStartText,
+        ));
+    }
+
+    // Game started! Remove any UI.
+    if game_state.started && start_screen_exists {
+        for text_obj in &query {
+            commands.entity(text_obj).despawn();
         }
     }
 }
