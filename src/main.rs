@@ -66,7 +66,7 @@ struct Collider;
 // Events
 // Enemy Death
 #[derive(Default)]
-struct EnemyDeathEvent;
+struct EnemyDeathEvent(usize);
 
 // Projectile has been fired
 #[derive(Default)]
@@ -407,7 +407,8 @@ fn check_for_collisions(
                 if enemy_check.is_some() {
                     println!("Collided!");
                     // Fire off a EnemyDeathEvent to notify other systems
-                    death_events.send_default();
+                    // death_events.send_default();
+                    death_events.send(EnemyDeathEvent(100));
 
                     // Enemy is destroyed
                     commands.entity(collider_entity).despawn();
@@ -457,14 +458,20 @@ fn update_material_time(time: Res<Time>, mut materials: ResMut<Assets<CustomMate
 
 fn update_player_score(
     mut player_score: ResMut<PlayerScore>,
-    enemy_death_events: EventReader<EnemyDeathEvent>,
+    mut enemy_death_events: EventReader<EnemyDeathEvent>,
     mut query: Query<&mut Text, With<PlayerScoreText>>,
 ) {
     // Check for events
     if !enemy_death_events.is_empty() {
         println!("[UI] Updating player score");
 
-        player_score.score += 10;
+        enemy_death_events.iter().for_each(|event| {
+            // let EnemyDeathEvent(points) = event;
+            // dbg!(&points);
+            // dbg!(&event.0);
+            player_score.score += &event.0;
+        });
+
         for mut text in &mut query {
             text.sections[1].value = player_score.score.to_string();
         }
