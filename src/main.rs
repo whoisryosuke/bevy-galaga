@@ -577,8 +577,7 @@ fn play_intro(
     start_events: EventReader<GameStartEvent>,
     mut intro_timer: ResMut<IntroTimer>,
 ) {
-    intro_timer.0.tick(time.delta());
-
+    // Did the game just start? Play the intro music and reset timer.
     if !start_events.is_empty() {
         start_events.clear();
 
@@ -592,7 +591,7 @@ fn play_intro(
     }
 
     // If the intro is playing, we increment it's timer to know if it's done or not
-    if game_state.intro && intro_timer.0.just_finished() {
+    if game_state.intro && intro_timer.0.tick(time.delta()).just_finished() {
         game_state.intro = false;
     }
 }
