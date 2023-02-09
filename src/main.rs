@@ -330,23 +330,27 @@ pub struct CustomMaterial {
 fn move_player(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&mut Transform, With<Player>>,
+    game_state: Res<GameState>,
 ) {
-    let mut player_transform = query.single_mut();
-    let mut direction = 0.0;
+    if game_state.started | !game_state.paused {
+        let mut player_transform = query.single_mut();
+        let mut direction = 0.0;
 
-    if keyboard_input.pressed(KeyCode::Left) {
-        direction -= 1.0;
+        if keyboard_input.pressed(KeyCode::Left) {
+            direction -= 1.0;
+        }
+
+        if keyboard_input.pressed(KeyCode::Right) {
+            direction += 1.0;
+        }
+
+        // Calculate the new horizontal player position based on player input
+        let new_player_position =
+            player_transform.translation.x + direction * PLAYER_SPEED * TIME_STEP;
+        // TODO: make sure player doesn't exceed bounds of game area
+
+        player_transform.translation.x = new_player_position;
     }
-
-    if keyboard_input.pressed(KeyCode::Right) {
-        direction += 1.0;
-    }
-
-    // Calculate the new horizontal player position based on player input
-    let new_player_position = player_transform.translation.x + direction * PLAYER_SPEED * TIME_STEP;
-    // TODO: make sure player doesn't exceed bounds of game area
-
-    player_transform.translation.x = new_player_position;
 }
 
 fn shoot_projectile(
@@ -359,40 +363,43 @@ fn shoot_projectile(
     mut query: Query<&Transform, With<Player>>,
     asset_server: Res<AssetServer>,
     mut projectile_events: EventWriter<ProjectileEvent>,
+    game_state: Res<GameState>,
 ) {
-    let player_transform = query.single_mut();
+    if game_state.started | !game_state.paused {
+        let player_transform = query.single_mut();
 
-    if keyboard_input.pressed(KeyCode::Space) {
-        // Check if player is allowed to shoot based on internal timer
-        // We have to "tick" the timer to update it with the latest time
-        if projectile_timer.0.tick(time.delta()).finished() {
-            // Reset the timer
-            projectile_timer.0.reset();
+        if keyboard_input.pressed(KeyCode::Space) {
+            // Check if player is allowed to shoot based on internal timer
+            // We have to "tick" the timer to update it with the latest time
+            if projectile_timer.0.tick(time.delta()).finished() {
+                // Reset the timer
+                projectile_timer.0.reset();
 
-            // Fire off a ProjectileEvent to notify other systems
-            projectile_events.send_default();
+                // Fire off a ProjectileEvent to notify other systems
+                projectile_events.send_default();
 
-            // Spawn projectile
-            commands.spawn((
-                MaterialMesh2dBundle {
-                    // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
-                    mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
-                    transform: Transform {
-                        translation: player_transform.translation,
-                        scale: PROJECTILE_SIZE,
+                // Spawn projectile
+                commands.spawn((
+                    MaterialMesh2dBundle {
+                        // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
+                        mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
+                        transform: Transform {
+                            translation: player_transform.translation,
+                            scale: PROJECTILE_SIZE,
+                            ..default()
+                        },
+                        material: materials.add(CustomMaterial {
+                            color: Color::BLUE,
+                            color_texture: Some(asset_server.load("sprites/player_projectile.png")),
+                            tile: 0.0,
+                            time: 0.0,
+                        }),
                         ..default()
                     },
-                    material: materials.add(CustomMaterial {
-                        color: Color::BLUE,
-                        color_texture: Some(asset_server.load("sprites/player_projectile.png")),
-                        tile: 0.0,
-                        time: 0.0,
-                    }),
-                    ..default()
-                },
-                Projectile,
-                Velocity(PLAYER_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
-            ));
+                    Projectile,
+                    Velocity(PLAYER_PROJECTILE_DIRECTION.normalize() * PROJECTILE_SPEED),
+                ));
+            }
         }
     }
 }
