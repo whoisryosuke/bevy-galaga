@@ -7,6 +7,7 @@ use bevy::{
     sprite::{
         collide_aabb::collide, Material2d, Material2dPlugin, MaterialMesh2dBundle, Mesh2dHandle,
     },
+    text,
     time::FixedTimestep,
 };
 
@@ -34,6 +35,7 @@ fn main() {
         .add_event::<GameStartEvent>()
         .add_event::<EnemyDeathEvent>()
         .add_event::<ProjectileEvent>()
+        .add_event::<NewLevelEvent>()
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(TIME_STEP as f64))
@@ -50,6 +52,7 @@ fn main() {
         .add_system(pause_game)
         .add_system(play_intro)
         .add_system(display_start_screen)
+        .add_system(spawn_enemies)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
@@ -87,8 +90,13 @@ struct EnemyDeathEvent(usize);
 #[derive(Default)]
 struct ProjectileEvent;
 
+// Game has started. This usually triggers intro sequence.
 #[derive(Default)]
 struct GameStartEvent;
+
+// Player has started a new level. The level is the first param.
+#[derive(Default)]
+struct NewLevelEvent(usize);
 
 // Sounds
 #[derive(Resource)]
@@ -122,6 +130,11 @@ struct GameFonts {
     body: Handle<Font>,
 }
 
+#[derive(Resource)]
+struct Textures {
+    enemy_green_bug: Handle<Image>,
+}
+
 // Timer used to track playback of intro
 #[derive(Resource)]
 struct IntroTimer(Timer);
@@ -145,14 +158,24 @@ const SCREEN_EDGE_VERTICAL: f32 = 350.0;
 const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 const INTRO_TIME_LIMIT: f32 = 6.0; // seconds
 
+// We size everything to the pixel size
 const PLAYER_SIZE: Vec3 = Vec3::new(15.0, 16.0, 0.0);
+// Then we scale it as needed to match the resolution.
+// Hardcoded for now, but could be responsive based on window size.
+const SIZE_SCALE: f32 = 2.0;
 const PLAYER_SPEED: f32 = 400.0;
 const PLAYER_STARTING_POSITION: Vec3 = Vec3::new(0.0, -300.0, 1.0);
-const ENEMY_STARTING_POSITION: Vec3 = Vec3::new(0.0, 20.0, 1.0);
-const PROJECTILE_SIZE: Vec3 = Vec3::splat(3.0);
+
+// Projectiles
+const PROJECTILE_SIZE: Vec3 = Vec3::new(3.0, 6.0, 0.0);
 const PROJECTILE_SPEED: f32 = 400.0;
 const ENEMY_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 const PLAYER_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, 0.5);
+
+// Enemies
+const ENEMY_STARTING_POSITION: Vec3 = Vec3::new(200.0, 20.0, 1.0);
+const ENEMY_COUNT: usize = 20;
+const ENEMY_GAP: f32 = 20.0;
 
 // UI
 const UI_FONT_MEDIUM: f32 = 32.0;
@@ -204,6 +227,12 @@ fn setup_game(
     let game_fonts = GameFonts {
         body: asset_server.load("fonts/VT323-Regular.ttf"),
     };
+
+    // Add textures to system
+    let textures = Textures {
+        enemy_green_bug: asset_server.load("sprites/enemy_green_bug.png"),
+    };
+    commands.insert_resource(textures);
 
     // UI Elements
     // High Score
@@ -288,7 +317,7 @@ fn setup_game(
             mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
             transform: Transform {
                 translation: PLAYER_STARTING_POSITION,
-                scale: PLAYER_SIZE,
+                scale: PLAYER_SIZE * SIZE_SCALE,
                 ..default()
             },
             material: materials.add(CustomMaterial {
@@ -300,28 +329,6 @@ fn setup_game(
             ..default()
         },
         Player,
-        Collider,
-    ));
-
-    // Spawn enemies
-    commands.spawn((
-        MaterialMesh2dBundle {
-            // mesh: meshes.add(shape::Plane { size: 3.0 }.into()).into(),
-            mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
-            transform: Transform {
-                translation: ENEMY_STARTING_POSITION,
-                scale: PLAYER_SIZE,
-                ..default()
-            },
-            material: materials.add(CustomMaterial {
-                color: Color::BLUE,
-                color_texture: Some(asset_server.load("sprites/enemy_green_bug.png")),
-                tile: 0.0,
-                time: 0.0,
-            }),
-            ..default()
-        },
-        Enemy,
         Collider,
     ));
 }
@@ -406,7 +413,7 @@ fn shoot_projectile(
                         mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
                         transform: Transform {
                             translation: player_transform.translation,
-                            scale: PROJECTILE_SIZE,
+                            scale: PROJECTILE_SIZE * SIZE_SCALE,
                             ..default()
                         },
                         material: materials.add(CustomMaterial {
@@ -576,6 +583,7 @@ fn play_intro(
     sound: Res<GameIntroSound>,
     start_events: EventReader<GameStartEvent>,
     mut intro_timer: ResMut<IntroTimer>,
+    mut level_events: EventWriter<NewLevelEvent>,
 ) {
     // Did the game just start? Play the intro music and reset timer.
     if !start_events.is_empty() {
@@ -593,6 +601,8 @@ fn play_intro(
     // If the intro is playing, we increment it's timer to know if it's done or not
     if game_state.intro && intro_timer.0.tick(time.delta()).just_finished() {
         game_state.intro = false;
+
+        level_events.send(NewLevelEvent(1));
     }
 }
 
@@ -640,6 +650,52 @@ fn display_start_screen(
     if game_state.started && start_screen_exists {
         for text_obj in &query {
             commands.entity(text_obj).despawn();
+        }
+    }
+}
+
+fn spawn_enemies(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
+    textures: Res<Textures>,
+    mut level_events: EventReader<NewLevelEvent>,
+    mut game_state: ResMut<GameState>,
+) {
+    // Check for events
+    if !level_events.is_empty() {
+        // We grab the level number from the NewLevelEvent
+        level_events.iter().for_each(|level| {
+            game_state.level = level.0;
+        });
+
+        // Clear all events this frame
+        level_events.clear();
+
+        for enemy_id in 0..ENEMY_COUNT {
+            dbg!(enemy_id);
+
+            // Spawn enemies
+            commands.spawn((
+                MaterialMesh2dBundle {
+                    mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
+                    transform: Transform {
+                        translation: ENEMY_STARTING_POSITION
+                            - Vec3::new(enemy_id as f32 * ENEMY_GAP * SIZE_SCALE, 0.0, 0.0),
+                        scale: PLAYER_SIZE * SIZE_SCALE,
+                        ..default()
+                    },
+                    material: materials.add(CustomMaterial {
+                        color: Color::BLUE,
+                        color_texture: Some(textures.enemy_green_bug.clone()),
+                        tile: 0.0,
+                        time: 0.0,
+                    }),
+                    ..default()
+                },
+                Enemy,
+                Collider,
+            ));
         }
     }
 }
