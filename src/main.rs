@@ -18,14 +18,20 @@ fn main() {
             PROJECTILE_TIME_LIMIT,
             TimerMode::Once,
         )))
+        .insert_resource(IntroTimer(Timer::from_seconds(
+            INTRO_TIME_LIMIT,
+            TimerMode::Once,
+        )))
         .add_startup_system(setup_game)
         .add_system(update_material_time)
         .insert_resource(PlayerScore { score: 0 })
         .insert_resource(GameState {
             started: false,
             paused: false,
+            intro: false,
             level: 1,
         })
+        .add_event::<GameStartEvent>()
         .add_event::<EnemyDeathEvent>()
         .add_event::<ProjectileEvent>()
         .add_system_set(
@@ -42,6 +48,7 @@ fn main() {
         )
         .add_system(start_game)
         .add_system(pause_game)
+        .add_system(play_intro)
         .add_system(display_start_screen)
         .add_system(bevy::window::close_on_esc)
         .run();
@@ -80,11 +87,16 @@ struct EnemyDeathEvent(usize);
 #[derive(Default)]
 struct ProjectileEvent;
 
+#[derive(Default)]
+struct GameStartEvent;
+
 // Sounds
 #[derive(Resource)]
 struct EnemyDeathSound(Handle<AudioSource>);
 #[derive(Resource)]
 struct ProjectileSound(Handle<AudioSource>);
+#[derive(Resource)]
+struct GameIntroSound(Handle<AudioSource>);
 
 // Resources
 // The players current score
@@ -99,6 +111,8 @@ struct GameState {
     started: bool,
     // Is game paused? Only relevant is game is started
     paused: bool,
+    // Are we playing game intro? Occurs after initial game start.
+    intro: bool,
     // The level number (1-99+)
     level: usize,
 }
@@ -107,6 +121,10 @@ struct GameState {
 struct GameFonts {
     body: Handle<Font>,
 }
+
+// Timer used to track playback of intro
+#[derive(Resource)]
+struct IntroTimer(Timer);
 
 // UI
 // The player's score (should be alongside a TextBundle)
@@ -125,6 +143,7 @@ const TIME_STEP: f32 = 1.0 / 60.0;
 const SCREEN_WIDTH_DEFAULT: f32 = 1300.0;
 const SCREEN_EDGE_VERTICAL: f32 = 350.0;
 const PROJECTILE_TIME_LIMIT: f32 = 0.1;
+const INTRO_TIME_LIMIT: f32 = 6.0; // seconds
 
 const PLAYER_SIZE: Vec3 = Vec3::new(15.0, 16.0, 0.0);
 const PLAYER_SPEED: f32 = 400.0;
@@ -159,6 +178,8 @@ fn setup_game(
     commands.insert_resource(EnemyDeathSound(enemy_death_sound));
     let projectile_sound = asset_server.load("sounds/projectile.mp3");
     commands.insert_resource(ProjectileSound(projectile_sound));
+    let game_intro_sound = asset_server.load("sounds/intro.mp3");
+    commands.insert_resource(GameIntroSound(game_intro_sound));
 
     // Background
     commands.spawn(MaterialMesh2dBundle {
@@ -332,7 +353,7 @@ fn move_player(
     mut query: Query<&mut Transform, With<Player>>,
     game_state: Res<GameState>,
 ) {
-    if game_state.started | !game_state.paused {
+    if game_state.started && !game_state.paused && !game_state.intro {
         let mut player_transform = query.single_mut();
         let mut direction = 0.0;
 
@@ -365,7 +386,7 @@ fn shoot_projectile(
     mut projectile_events: EventWriter<ProjectileEvent>,
     game_state: Res<GameState>,
 ) {
-    if game_state.started | !game_state.paused {
+    if game_state.started && !game_state.paused && !game_state.intro {
         let player_transform = query.single_mut();
 
         if keyboard_input.pressed(KeyCode::Space) {
@@ -522,12 +543,19 @@ fn update_player_score(
     }
 }
 
-fn start_game(mut game_state: ResMut<GameState>, keyboard_input: Res<Input<KeyCode>>) {
+fn start_game(
+    mut game_state: ResMut<GameState>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut start_events: EventWriter<GameStartEvent>,
+) {
     // If game hasn't started, detect space/return key to start game
     if !game_state.started {
         if keyboard_input.pressed(KeyCode::Space) | keyboard_input.pressed(KeyCode::Return) {
             println!("[INPUT] Game Started");
             game_state.started = true;
+
+            // Let other systems know we started (like intro sequence)
+            start_events.send_default();
         }
     }
 }
@@ -538,6 +566,34 @@ fn pause_game(mut game_state: ResMut<GameState>, keyboard_input: Res<Input<KeyCo
         if keyboard_input.pressed(KeyCode::P) {
             game_state.paused = !game_state.paused;
         }
+    }
+}
+
+fn play_intro(
+    time: Res<Time>,
+    mut game_state: ResMut<GameState>,
+    audio: Res<Audio>,
+    sound: Res<GameIntroSound>,
+    start_events: EventReader<GameStartEvent>,
+    mut intro_timer: ResMut<IntroTimer>,
+) {
+    intro_timer.0.tick(time.delta());
+
+    if !start_events.is_empty() {
+        start_events.clear();
+
+        // Let the app know we're in an intro sequence - doesn't have to be event
+        game_state.intro = true;
+
+        // Play the intro song
+        audio.play(sound.0.clone());
+
+        intro_timer.0.reset();
+    }
+
+    // If the intro is playing, we increment it's timer to know if it's done or not
+    if game_state.intro && intro_timer.0.just_finished() {
+        game_state.intro = false;
     }
 }
 
