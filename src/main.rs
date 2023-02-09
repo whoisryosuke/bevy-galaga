@@ -189,7 +189,7 @@ fn setup_game(
     commands.spawn((
         TextBundle::from_sections([
             TextSection::new(
-                "High Score\n",
+                "HIGH SCORE\n",
                 TextStyle {
                     font: game_fonts.body.clone(),
                     font_size: UI_FONT_MEDIUM,
@@ -232,7 +232,7 @@ fn setup_game(
     commands.spawn((
         TextBundle::from_sections([
             TextSection::new(
-                "1up\n",
+                "1UP\n",
                 TextStyle {
                     font: asset_server.load("fonts/VT323-Regular.ttf"),
                     font_size: UI_FONT_MEDIUM,
@@ -559,7 +559,7 @@ fn display_start_screen(
         // Display UI for Start Screen
         commands.spawn((
             TextBundle::from_sections([TextSection::new(
-                "Press Spacebar/Return to Start \n",
+                "Press Spacebar/Return to Start \n".to_uppercase(),
                 TextStyle {
                     font: game_fonts.body.clone(),
                     font_size: UI_FONT_MEDIUM,
