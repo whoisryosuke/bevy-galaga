@@ -354,6 +354,16 @@ pub struct CustomMaterial {
     #[sampler(2)]
     color_texture: Option<Handle<Image>>,
 }
+impl Default for CustomMaterial {
+    fn default() -> Self {
+        CustomMaterial {
+            color: Color::BLUE,
+            tile: 0.0,
+            time: 0.0,
+            color_texture: None,
+        }
+    }
+}
 
 fn move_player(
     keyboard_input: Res<Input<KeyCode>>,
@@ -688,8 +698,7 @@ fn spawn_enemies(
                     material: materials.add(CustomMaterial {
                         color: Color::BLUE,
                         color_texture: Some(textures.enemy_green_bug.clone()),
-                        tile: 0.0,
-                        time: 0.0,
+                        ..Default::default()
                     }),
                     ..default()
                 },
