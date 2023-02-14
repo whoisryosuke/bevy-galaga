@@ -75,9 +75,11 @@ struct Player;
 #[derive(Component)]
 struct Enemy;
 
-// The EnemyGroup object. Keeps track of what group the enemy is in.
+// The EnemyGroup object.
+// First `usize` = What group ID the enemy is in.
+// Second `usize` = Enemy ID
 #[derive(Component)]
-struct EnemyGroupComponent(usize);
+struct EnemyGroupComponent(usize, usize);
 
 // The projectile spawned by Player firing weapon
 #[derive(Component)]
@@ -220,7 +222,7 @@ const PLAYER_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, 0.5);
 // This is the position of the enemy that's hiding beyond top of screen
 const ENEMY_INTRO_POSITION: Vec3 = Vec3::new(0.0, SCREEN_EDGE_VERTICAL + 20.0, 1.0);
 // Position of the top "line" the enemies form as a grid.
-const ENEMY_LINE_POSITION: Vec3 = Vec3::new(200.0, 20.0, 1.0);
+const ENEMY_LINE_POSITION: Vec3 = Vec3::new(-400.0, 20.0, 1.0);
 const ENEMY_COUNT: usize = 20;
 const ENEMY_GAP: f32 = 20.0;
 const ENEMY_TIME: f32 = 3.0; // seconds
@@ -795,7 +797,7 @@ fn spawn_enemy_group(
                 },
                 Enemy,
                 Collider,
-                EnemyGroupComponent(enemy_spawn_state.current_group),
+                EnemyGroupComponent(enemy_spawn_state.current_group, enemy_id),
             ));
 
             enemy_id += 1;
@@ -816,24 +818,34 @@ fn intro_enemy_group_dance(
     mut enemy_spawn_state: ResMut<EnemySpawnState>,
 ) {
     // Loop through all enemies
-    for (mut enemy_position, enemy_group_id) in &mut query {
-        let EnemyGroupComponent(id) = enemy_group_id;
-        // but limit to only current group
-        println!("id: {:?}", id);
-        println!("enemy id: {:?}", &enemy_spawn_state.current_group);
-        println!("group: {:?}", &enemy_spawn_state.groups[*id].finished);
-        if id <= &enemy_spawn_state.current_group && !&enemy_spawn_state.groups[*id].finished {
-            // Calculate the new horizontal player position based on player input
+    for (mut enemy_position, enemy_group_id_option) in &mut query {
+        let EnemyGroupComponent(enemy_group_id, enemy_id) = enemy_group_id_option;
+
+        // If this is the current group (or any previous that haven't finished)
+        if enemy_group_id <= &enemy_spawn_state.current_group
+            && !&enemy_spawn_state.groups[*enemy_group_id].finished
+        {
+            // Move enemy into position. We animate smoother using a "lerp" to enable "easing".
+            // Enemy starts at top of screen (where they initially spawn) and travel directly to position in "line"
             // let new_projectile_position = enemy_position.translation.y - 100.0 * TIME_STEP;
             // let new_projectile_position = lerp(ENEMY_INTRO_POSITION.y, ENEMY_LINE_POSITION.y, 0.1);
-            let new_projectile_position =
-                lerp(enemy_position.translation.y, ENEMY_LINE_POSITION.y, 0.1);
-            // let new_projectile_position = lerp(20.0, 0.0, 0.1);
-            // TODO: make sure player doesn't exceed bounds of game area
+            let new_projectile_position_y = lerp(
+                enemy_position.translation.y,
+                ENEMY_LINE_POSITION.y + *enemy_group_id as f32 * ENEMY_GAP * SIZE_SCALE,
+                0.1,
+            );
+            let new_projectile_position_x = lerp(
+                enemy_position.translation.x,
+                ENEMY_LINE_POSITION.x + *enemy_id as f32 * ENEMY_GAP * SIZE_SCALE,
+                0.1,
+            );
+            // @TODO: Calculate a "next" position and lerp to that instead (to get the "circular" motion)
+            // @TODO: Yet animation should still and at same point eventually -- maybe second phase (return to home kinda system)
 
-            enemy_position.translation.y = new_projectile_position;
+            enemy_position.translation.y = new_projectile_position_y;
+            enemy_position.translation.x = new_projectile_position_x;
 
-            println!("enemy position: {:?}", enemy_position.translation.y);
+            // println!("enemy position: {:?}", enemy_position.translation.y);
         }
     }
 }
