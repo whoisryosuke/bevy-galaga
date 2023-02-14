@@ -23,6 +23,10 @@ fn main() {
             INTRO_TIME_LIMIT,
             TimerMode::Once,
         )))
+        .insert_resource(EnemySpawnTimer(Timer::from_seconds(
+            ENEMY_TIME,
+            TimerMode::Once,
+        )))
         .add_startup_system(setup_game)
         .add_system(update_material_time)
         .insert_resource(PlayerScore { score: 0 })
@@ -31,6 +35,10 @@ fn main() {
             paused: false,
             intro: false,
             level: 1,
+        })
+        .insert_resource(EnemySpawnState {
+            current_group: 0,
+            groups: vec![],
         })
         .add_event::<GameStartEvent>()
         .add_event::<EnemyDeathEvent>()
@@ -53,6 +61,8 @@ fn main() {
         .add_system(play_intro)
         .add_system(display_start_screen)
         .add_system(spawn_enemies)
+        .add_system(spawn_enemy_group)
+        .add_system(intro_enemy_group_dance)
         .add_system(bevy::window::close_on_esc)
         .run();
 }
@@ -64,6 +74,10 @@ struct Player;
 // The Enemy object
 #[derive(Component)]
 struct Enemy;
+
+// The EnemyGroup object. Keeps track of what group the enemy is in.
+#[derive(Component)]
+struct EnemyGroupComponent(usize);
 
 // The projectile spawned by Player firing weapon
 #[derive(Component)]
@@ -125,6 +139,36 @@ struct GameState {
     level: usize,
 }
 
+// Galaga spawns multiple enemies at a time in groups,
+// so we use this to keep track of their "intro dance"
+#[derive(Resource)]
+struct EnemySpawnState {
+    // Index of current enemy group
+    current_group: usize,
+    // Enemy groups. Each group is a vector of different enemies (e.g. blue vs red bugs)
+    groups: Vec<EnemyGroup>,
+}
+
+// All the enemy types in game
+enum EnemyTypes {
+    GreenBug,
+}
+
+struct EnemyData {
+    enemy_type: EnemyTypes,
+    // Where enemy ends up
+    end_position: Vec3,
+}
+
+struct EnemyGroup {
+    group: Vec<EnemyData>,
+    finished: bool,
+}
+
+// Timer used to track time between spawning new enemy groups
+#[derive(Resource)]
+struct EnemySpawnTimer(Timer);
+
 #[derive(Resource)]
 struct GameFonts {
     body: Handle<Font>,
@@ -154,7 +198,7 @@ struct PressStartText;
 // in this case, 60fps
 const TIME_STEP: f32 = 1.0 / 60.0;
 const SCREEN_WIDTH_DEFAULT: f32 = 1300.0;
-const SCREEN_EDGE_VERTICAL: f32 = 350.0;
+const SCREEN_EDGE_VERTICAL: f32 = 360.0;
 const PROJECTILE_TIME_LIMIT: f32 = 0.1;
 const INTRO_TIME_LIMIT: f32 = 6.0; // seconds
 
@@ -173,9 +217,13 @@ const ENEMY_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, -0.5);
 const PLAYER_PROJECTILE_DIRECTION: Vec2 = Vec2::new(0.5, 0.5);
 
 // Enemies
-const ENEMY_STARTING_POSITION: Vec3 = Vec3::new(200.0, 20.0, 1.0);
+// This is the position of the enemy that's hiding beyond top of screen
+const ENEMY_INTRO_POSITION: Vec3 = Vec3::new(0.0, SCREEN_EDGE_VERTICAL + 20.0, 1.0);
+// Position of the top "line" the enemies form as a grid.
+const ENEMY_LINE_POSITION: Vec3 = Vec3::new(200.0, 20.0, 1.0);
 const ENEMY_COUNT: usize = 20;
 const ENEMY_GAP: f32 = 20.0;
+const ENEMY_TIME: f32 = 3.0; // seconds
 
 // UI
 const UI_FONT_MEDIUM: f32 = 32.0;
@@ -665,12 +713,9 @@ fn display_start_screen(
 }
 
 fn spawn_enemies(
-    mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<CustomMaterial>>,
-    textures: Res<Textures>,
     mut level_events: EventReader<NewLevelEvent>,
     mut game_state: ResMut<GameState>,
+    mut enemy_spawn_state: ResMut<EnemySpawnState>,
 ) {
     // Check for events
     if !level_events.is_empty() {
@@ -682,16 +727,62 @@ fn spawn_enemies(
         // Clear all events this frame
         level_events.clear();
 
-        for enemy_id in 0..ENEMY_COUNT {
-            dbg!(enemy_id);
+        let mut new_enemy_groups: Vec<EnemyGroup> = Vec::new();
+        for group_id in 0..2 {
+            let mut group: Vec<EnemyData> = Vec::new();
+            for enemy_id in 0..ENEMY_COUNT {
+                group.push(EnemyData {
+                    enemy_type: EnemyTypes::GreenBug,
+                    end_position: ENEMY_LINE_POSITION
+                        + Vec3 {
+                            x: enemy_id as f32 * ENEMY_GAP,
+                            y: 0.0,
+                            z: 0.0,
+                        },
+                });
+            }
 
+            let new_group = EnemyGroup {
+                group,
+                finished: false,
+            };
+            new_enemy_groups.push(new_group);
+        }
+
+        enemy_spawn_state.current_group = 0;
+        enemy_spawn_state.groups = new_enemy_groups;
+    }
+}
+
+// After we define enemy groups, each group spawns and flys into screen (making circles and whatnot)
+fn spawn_enemy_group(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
+    textures: Res<Textures>,
+    mut enemy_spawn_state: ResMut<EnemySpawnState>,
+    mut enemy_timer: ResMut<EnemySpawnTimer>,
+    time: Res<Time>,
+) {
+    // Check if we're on the last group - stop if so
+    if enemy_spawn_state.current_group == enemy_spawn_state.groups.len() {
+        return;
+    }
+
+    // Enemy timer finished? Spawn enemies and reset timer
+
+    if enemy_timer.0.tick(time.delta()).finished() {
+        let current_group = &enemy_spawn_state.groups[enemy_spawn_state.current_group];
+
+        let mut enemy_id = 0;
+        for enemy in &current_group.group {
             // Spawn enemies
             commands.spawn((
                 MaterialMesh2dBundle {
                     mesh: meshes.add(Mesh::from(shape::Quad::default())).into(),
                     transform: Transform {
-                        translation: ENEMY_STARTING_POSITION
-                            - Vec3::new(enemy_id as f32 * ENEMY_GAP * SIZE_SCALE, 0.0, 0.0),
+                        translation: ENEMY_INTRO_POSITION
+                            + Vec3::new(0.0, enemy_id as f32 * ENEMY_GAP * SIZE_SCALE, 0.0),
                         scale: PLAYER_SIZE * SIZE_SCALE,
                         ..default()
                     },
@@ -704,7 +795,50 @@ fn spawn_enemies(
                 },
                 Enemy,
                 Collider,
+                EnemyGroupComponent(enemy_spawn_state.current_group),
             ));
+
+            enemy_id += 1;
+        }
+
+        // Reset the enemy spawn timer
+        enemy_timer.0.reset();
+
+        // Increment to the next group
+        enemy_spawn_state.current_group += 1;
+
+        println!("[ENEMY] Spawning GROUP");
+    }
+}
+
+fn intro_enemy_group_dance(
+    mut query: Query<(&mut Transform, &EnemyGroupComponent), With<Enemy>>,
+    mut enemy_spawn_state: ResMut<EnemySpawnState>,
+) {
+    // Loop through all enemies
+    for (mut enemy_position, enemy_group_id) in &mut query {
+        let EnemyGroupComponent(id) = enemy_group_id;
+        // but limit to only current group
+        println!("id: {:?}", id);
+        println!("enemy id: {:?}", &enemy_spawn_state.current_group);
+        println!("group: {:?}", &enemy_spawn_state.groups[*id].finished);
+        if id <= &enemy_spawn_state.current_group && !&enemy_spawn_state.groups[*id].finished {
+            // Calculate the new horizontal player position based on player input
+            // let new_projectile_position = enemy_position.translation.y - 100.0 * TIME_STEP;
+            // let new_projectile_position = lerp(ENEMY_INTRO_POSITION.y, ENEMY_LINE_POSITION.y, 0.1);
+            let new_projectile_position =
+                lerp(enemy_position.translation.y, ENEMY_LINE_POSITION.y, 0.1);
+            // let new_projectile_position = lerp(20.0, 0.0, 0.1);
+            // TODO: make sure player doesn't exceed bounds of game area
+
+            enemy_position.translation.y = new_projectile_position;
+
+            println!("enemy position: {:?}", enemy_position.translation.y);
         }
     }
+}
+
+// Utility funcitons
+fn lerp(start: f32, end: f32, amt: f32) -> f32 {
+    return (1.0 - amt) * start + amt * end;
 }
