@@ -201,7 +201,7 @@ struct PressStartText;
 const TIME_STEP: f32 = 1.0 / 60.0;
 const SCREEN_WIDTH_DEFAULT: f32 = 1300.0;
 const SCREEN_EDGE_VERTICAL: f32 = 360.0;
-const PROJECTILE_TIME_LIMIT: f32 = 0.1;
+const PROJECTILE_TIME_LIMIT: f32 = 0.3;
 const INTRO_TIME_LIMIT: f32 = 6.0; // seconds
 
 // We size everything to the pixel size
@@ -816,6 +816,7 @@ fn spawn_enemy_group(
 fn intro_enemy_group_dance(
     mut query: Query<(&mut Transform, &EnemyGroupComponent), With<Enemy>>,
     mut enemy_spawn_state: ResMut<EnemySpawnState>,
+    time: Res<Time>,
 ) {
     // Loop through all enemies
     for (mut enemy_position, enemy_group_id_option) in &mut query {
@@ -829,16 +830,10 @@ fn intro_enemy_group_dance(
             // Enemy starts at top of screen (where they initially spawn) and travel directly to position in "line"
             // let new_projectile_position = enemy_position.translation.y - 100.0 * TIME_STEP;
             // let new_projectile_position = lerp(ENEMY_INTRO_POSITION.y, ENEMY_LINE_POSITION.y, 0.1);
-            let new_projectile_position_y = lerp(
-                enemy_position.translation.y,
-                ENEMY_LINE_POSITION.y + *enemy_group_id as f32 * ENEMY_GAP * SIZE_SCALE,
-                0.1,
-            );
-            let new_projectile_position_x = lerp(
-                enemy_position.translation.x,
-                ENEMY_LINE_POSITION.x + *enemy_id as f32 * ENEMY_GAP * SIZE_SCALE,
-                0.1,
-            );
+            let final_y = ENEMY_LINE_POSITION.y + *enemy_group_id as f32 * ENEMY_GAP * SIZE_SCALE;
+            let new_projectile_position_y = lerp(enemy_position.translation.y, final_y, 0.1);
+            let final_x = ENEMY_LINE_POSITION.x + *enemy_id as f32 * ENEMY_GAP * SIZE_SCALE;
+            let new_projectile_position_x = lerp(enemy_position.translation.x, final_x, 0.1);
             // @TODO: Calculate a "next" position and lerp to that instead (to get the "circular" motion)
             // @TODO: Yet animation should still and at same point eventually -- maybe second phase (return to home kinda system)
 
@@ -846,6 +841,10 @@ fn intro_enemy_group_dance(
             enemy_position.translation.x = new_projectile_position_x;
 
             // println!("enemy position: {:?}", enemy_position.translation.y);
+
+            if enemy_position.translation.y == final_y && enemy_position.translation.x == final_x {
+                enemy_spawn_state.groups[*enemy_group_id].finished = true;
+            }
         }
     }
 }
