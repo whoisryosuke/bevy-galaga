@@ -13,7 +13,7 @@ use bevy::{
 
 fn main() {
     App::new()
-        .add_plugins(DefaultPlugins)
+        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
         .add_plugin(Material2dPlugin::<CustomMaterial>::default())
         .insert_resource(ProjectileTimer(Timer::from_seconds(
             PROJECTILE_TIME_LIMIT,
@@ -54,6 +54,7 @@ fn main() {
                 .with_system(play_projectile_sound.before(check_for_collisions))
                 .with_system(update_player_score.before(play_enemy_death_sound))
                 .with_system(play_enemy_death_sound.before(check_for_collisions))
+                .with_system(animate_explosion)
                 .with_system(shoot_projectile.before(check_for_collisions)),
         )
         .add_system(start_game)
@@ -179,11 +180,19 @@ struct GameFonts {
 #[derive(Resource)]
 struct Textures {
     enemy_green_bug: Handle<Image>,
+    explosion_enemy: Handle<Image>,
 }
 
 // Timer used to track playback of intro
 #[derive(Resource)]
 struct IntroTimer(Timer);
+
+// Timer used to track playback of animations
+#[derive(Component)]
+struct AnimationTimer(Timer);
+// The current frame of animation
+#[derive(Component)]
+struct AnimationFrame(usize);
 
 // UI
 // The player's score (should be alongside a TextBundle)
@@ -281,6 +290,7 @@ fn setup_game(
     // Add textures to system
     let textures = Textures {
         enemy_green_bug: asset_server.load("sprites/enemy_green_bug.png"),
+        explosion_enemy: asset_server.load("sprites/explosion_enemy.png"),
     };
     commands.insert_resource(textures);
 
@@ -521,6 +531,8 @@ fn check_for_collisions(
     projectiles_query: Query<(Entity, &Transform), With<Projectile>>,
     collider_query: Query<(Entity, &Transform, Option<&Enemy>), With<Collider>>,
     mut death_events: EventWriter<EnemyDeathEvent>,
+    textures: Res<Textures>,
+    mut texture_atlases: ResMut<Assets<TextureAtlas>>,
 ) {
     // Loop through all the projectiles on screen
     for (projectile_entity, projectile_transform) in &projectiles_query {
@@ -542,6 +554,30 @@ fn check_for_collisions(
                     // death_events.send_default();
                     death_events.send(EnemyDeathEvent(100));
 
+                    // Spawn explosion
+                    let texture_atlas = TextureAtlas::from_grid(
+                        textures.explosion_enemy.clone(),
+                        Vec2::new(30.0, 32.0),
+                        4,
+                        1,
+                        None,
+                        None,
+                    );
+                    let texture_atlas_handle = texture_atlases.add(texture_atlas);
+
+                    let mut position = Transform::from_scale(Vec3::splat(SIZE_SCALE));
+                    position.translation = collider_transform.translation.clone();
+
+                    commands.spawn((
+                        SpriteSheetBundle {
+                            texture_atlas: texture_atlas_handle,
+                            transform: position,
+                            ..default()
+                        },
+                        AnimationTimer(Timer::from_seconds(0.1, TimerMode::Repeating)),
+                        AnimationFrame(0),
+                    ));
+
                     // Enemy is destroyed
                     commands.entity(collider_entity).despawn();
 
@@ -549,6 +585,36 @@ fn check_for_collisions(
                     commands.entity(projectile_entity).despawn();
                 }
             }
+        }
+    }
+}
+
+// Animate any explosions in scene frame by frame and despawn after last one
+fn animate_explosion(
+    mut commands: Commands,
+    time: Res<Time>,
+    texture_atlases: Res<Assets<TextureAtlas>>,
+    mut query: Query<(
+        Entity,
+        &mut AnimationTimer,
+        &mut TextureAtlasSprite,
+        &Handle<TextureAtlas>,
+    )>,
+) {
+    for (entity, mut timer, mut sprite, texture_atlas_handle) in &mut query {
+        timer.0.tick(time.delta());
+        if timer.0.just_finished() {
+            let texture_atlas = texture_atlases.get(texture_atlas_handle).unwrap();
+
+            // Check if last frame and delete explosion if so
+            // Sprite Index starts from 0, so add 1 to match texture atlas length
+            if texture_atlas.textures.len() == sprite.index + 1 {
+                commands.entity(entity).despawn();
+                return;
+            }
+
+            // Otherwise animate one more frame
+            sprite.index = (sprite.index + 1) % texture_atlas.textures.len();
         }
     }
 }
@@ -653,7 +719,7 @@ fn play_intro(
         game_state.intro = true;
 
         // Play the intro song
-        audio.play(sound.0.clone());
+        // audio.play(sound.0.clone());
 
         intro_timer.0.reset();
     }
