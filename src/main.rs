@@ -36,6 +36,7 @@ fn main() {
             intro: false,
             level: 1,
         })
+        .insert_resource(GameSettingsState { volume: 0.1 })
         .insert_resource(EnemySpawnState {
             current_group: 0,
             groups: vec![],
@@ -129,7 +130,7 @@ struct GameIntroSound(Handle<AudioSource>);
 struct PlayerScore {
     score: usize,
 }
-// The players current score
+// Global game state (level management, un/paused, etc)
 #[derive(Resource)]
 struct GameState {
     // Has game started? (aka user presses "start")
@@ -140,6 +141,13 @@ struct GameState {
     intro: bool,
     // The level number (1-99+)
     level: usize,
+}
+
+// The players settings
+#[derive(Resource)]
+struct GameSettingsState {
+    // Volume of game (1 = full volume)
+    volume: f32,
 }
 
 // Galaga spawns multiple enemies at a time in groups,
@@ -623,13 +631,20 @@ fn play_enemy_death_sound(
     death_events: EventReader<EnemyDeathEvent>,
     audio: Res<Audio>,
     sound: Res<EnemyDeathSound>,
+    settings: Res<GameSettingsState>,
 ) {
     // Check for events
     if !death_events.is_empty() {
         // Clear all events this frame
         death_events.clear();
 
-        audio.play(sound.0.clone());
+        audio.play_with_settings(
+            sound.0.clone(),
+            PlaybackSettings {
+                volume: settings.volume,
+                ..Default::default()
+            },
+        );
     }
 }
 
@@ -637,6 +652,7 @@ fn play_projectile_sound(
     projectile_events: EventReader<ProjectileEvent>,
     audio: Res<Audio>,
     sound: Res<ProjectileSound>,
+    settings: Res<GameSettingsState>,
 ) {
     // Check for events
     if !projectile_events.is_empty() {
@@ -644,7 +660,13 @@ fn play_projectile_sound(
         projectile_events.clear();
         println!("[AUDIO] Playing projectile sound!");
 
-        audio.play(sound.0.clone());
+        audio.play_with_settings(
+            sound.0.clone(),
+            PlaybackSettings {
+                volume: settings.volume,
+                ..Default::default()
+            },
+        );
     }
 }
 
@@ -710,6 +732,7 @@ fn play_intro(
     start_events: EventReader<GameStartEvent>,
     mut intro_timer: ResMut<IntroTimer>,
     mut level_events: EventWriter<NewLevelEvent>,
+    settings: Res<GameSettingsState>,
 ) {
     // Did the game just start? Play the intro music and reset timer.
     if !start_events.is_empty() {
@@ -719,7 +742,13 @@ fn play_intro(
         game_state.intro = true;
 
         // Play the intro song
-        // audio.play(sound.0.clone());
+        audio.play_with_settings(
+            sound.0.clone(),
+            PlaybackSettings {
+                volume: settings.volume,
+                ..Default::default()
+            },
+        );
 
         intro_timer.0.reset();
     }
